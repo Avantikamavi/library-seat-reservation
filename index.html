@@ -357,194 +357,183 @@
 
    <script>
 
+
 let selectedSeat = null;
 
-const seats = document.querySelectorAll(".available-seat");
+const allSeats = document.querySelectorAll(".seat");
+const form = document.getElementById("reservationForm");
+const selectedSeatText = document.getElementById("selectedSeat");
+const seatMessage = document.getElementById("seatMessage");
+const dateInput = document.getElementById("date");
+const timeInput = document.getElementById("time");
 
-const selectedSeatText =
-    document.getElementById("selectedSeat");
+const today = new Date();
+const localToday = [
+    today.getFullYear(),
+    String(today.getMonth() + 1).padStart(2, "0"),
+    String(today.getDate()).padStart(2, "0")
+].join("-");
 
-const seatMessage =
-    document.getElementById("seatMessage");
+dateInput.min = localToday;
 
+function getBookings() {
+    return JSON.parse(localStorage.getItem("demoReservations") || "[]");
+}
 
-// ===============================
-// SELECT SEAT
-// ===============================
+function isBooked(seat, date, time) {
+    return getBookings().some(booking =>
+        booking.seat === seat &&
+        booking.date === date &&
+        booking.time === time
+    );
+}
 
-seats.forEach(seat => {
+function renderSeats() {
+    const date = dateInput.value;
+    const time = timeInput.value;
+    let availableCount = 0;
 
+    allSeats.forEach(seat => {
+        const seatNumber = seat.dataset.seat;
+
+        // Original occupied seats remain occupied
+        const originallyOccupied =
+            seat.classList.contains("originally-occupied");
+
+        const booked = date && time &&
+            isBooked(seatNumber, date, time);
+
+        seat.classList.remove("available-seat", "occupied-seat", "selected-seat");
+
+        if (originallyOccupied || booked) {
+            seat.classList.add("occupied-seat");
+            seat.disabled = true;
+        } else {
+            seat.classList.add("available-seat");
+            seat.disabled = false;
+            availableCount++;
+        }
+    });
+
+    document.getElementById("availableCount").textContent =
+        availableCount;
+
+    if (selectedSeat) {
+        const currentSeat = document.querySelector(
+            `[data-seat="${selectedSeat}"]`
+        );
+
+        if (!currentSeat || currentSeat.disabled) {
+            selectedSeat = null;
+            selectedSeatText.textContent = "None";
+            seatMessage.textContent =
+                "Please select an available seat above.";
+        } else {
+            currentSeat.classList.add("selected-seat");
+        }
+    }
+}
+
+// Remember which seats were originally occupied in the HTML
+allSeats.forEach(seat => {
+    if (seat.classList.contains("occupied-seat")) {
+        seat.classList.add("originally-occupied");
+    }
+});
+
+// Seat selection
+allSeats.forEach(seat => {
     seat.addEventListener("click", () => {
+        if (seat.disabled) return;
 
-        seats.forEach(s => {
-            s.classList.remove("selected-seat");
-        });
+        allSeats.forEach(s =>
+            s.classList.remove("selected-seat")
+        );
 
         seat.classList.add("selected-seat");
-
         selectedSeat = seat.dataset.seat;
 
         selectedSeatText.textContent = selectedSeat;
-
         seatMessage.textContent =
             "Great! This seat is available.";
-
     });
-
 });
 
+// Update availability when date or time changes
+dateInput.addEventListener("change", () => {
+    selectedSeat = null;
+    selectedSeatText.textContent = "None";
+    renderSeats();
+});
 
-// ===============================
-// RESERVATION
-// ===============================
+timeInput.addEventListener("change", () => {
+    selectedSeat = null;
+    selectedSeatText.textContent = "None";
+    renderSeats();
+});
 
-const form =
-    document.getElementById("reservationForm");
-
-
-form.addEventListener("submit", async function(event) {
-    console.log("RESERVATION FORM SUBMITTED");
-
+// Demo reservation
+form.addEventListener("submit", function(event) {
     event.preventDefault();
 
-
     if (!selectedSeat) {
-
         seatMessage.textContent =
-            "⚠ Please select a seat first.";
-
+            "Please select an available seat first.";
         return;
-
     }
 
+    const name = document.getElementById("name").value;
+    const studentId = document.getElementById("studentId").value;
+    const date = dateInput.value;
+    const time = timeInput.value;
 
-    const name =
-        document.getElementById("name").value;
-
-    const studentId =
-        document.getElementById("studentId").value;
-
-    const date =
-        document.getElementById("date").value;
-
-    const time =
-        document.getElementById("time").value;
-
-
-    try {
-
-        const response = await fetch(
-            "/api/reservations",
-            {
-
-                method: "POST",
-
-                headers: {
-                    "Content-Type": "application/json"
-                },
-
-                body: JSON.stringify({
-
-                    name: name,
-                    studentId: studentId,
-                    date: date,
-                    time: time,
-                    seat: selectedSeat
-
-                })
-
-            }
-        );
-
-
-        const data = await response.json();
-
-
-        // Something went wrong
-        if (!response.ok) {
-
-            alert(data.message);
-
-            return;
-
-        }
-
-
-        // Successful reservation
-        document.getElementById("confirmationText")
-            .textContent =
-            `${name}, your seat ${selectedSeat} has been reserved for ${date} (${time}).`;
-
-
-        document.getElementById("successModal")
-            .classList.add("show");
-
-
-        // Make seat occupied visually
-        const chosenSeat =
-            document.querySelector(
-                `[data-seat="${selectedSeat}"]`
-            );
-
-
-        chosenSeat.classList.remove(
-            "selected-seat",
-            "available-seat"
-        );
-
-        chosenSeat.classList.add(
-            "occupied-seat"
-        );
-
-        chosenSeat.disabled = true;
-
-
-        selectedSeat = null;
-
-        selectedSeatText.textContent = "None";
-
-        form.reset();
-
-
-    } catch (error) {
-
-        console.error(error);
-
-        alert(
-            "Could not connect to the server."
-        );
-
+    if (isBooked(selectedSeat, date, time)) {
+        alert("This seat is already reserved.");
+        renderSeats();
+        return;
     }
 
+    const reservation = {
+        name,
+        studentId,
+        date,
+        time,
+        seat: selectedSeat
+    };
+
+    const bookings = getBookings();
+    bookings.push(reservation);
+
+    localStorage.setItem(
+        "demoReservations",
+        JSON.stringify(bookings)
+    );
+
+    document.getElementById("confirmationText").textContent =
+        `${name}, your seat ${selectedSeat} has been reserved for ${date} (${time}).`;
+
+    document.getElementById("successModal")
+        .classList.add("show");
+
+    selectedSeat = null;
+    selectedSeatText.textContent = "None";
+    seatMessage.textContent =
+        "Please select an available seat above.";
+
+    form.reset();
+    renderSeats();
 });
 
-
-// ===============================
-// CLOSE SUCCESS POPUP
-// ===============================
-
+// Close confirmation popup
 document.getElementById("closeModal")
     .addEventListener("click", () => {
-
         document.getElementById("successModal")
             .classList.remove("show");
-
     });
 
+// Initial display
+renderSeats();
 
-// ===============================
-// TODAY'S DATE
-// ===============================
-
-const dateInput =
-    document.getElementById("date");
-
-const today =
-    new Date()
-        .toISOString()
-        .split("T")[0];
-
-dateInput.min = today;
 
 </script>
 
